@@ -1,8 +1,8 @@
-#[derive(Debug)]
+#[derive(Debug,Clone,PartialEq)]
 pub struct Message {
-    peer: usize,
-    content: Vec<u8>,
-    has_more: bool,
+    pub peer: usize,
+    pub content: Vec<u8>,
+    pub has_more: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -49,7 +49,7 @@ impl Message {
                 has_more,
             });
         }
-        return Err(ParseError::NoContent);
+        return Err(ParseError::NoEnding);
     }
 
     fn encode_inner(peer: usize, content: &Vec<u8>)->(Vec<u8>,bool){
