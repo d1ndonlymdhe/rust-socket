@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::{TcpListener, TcpStream}, sync::{mpsc::{self, SendError, Sender}, Mutex, OnceLock}};
+use std::{collections::HashMap, io::Write, net::{TcpListener, TcpStream}, sync::{mpsc::{self, SendError, Sender}, Mutex, OnceLock}};
 
 use crate::{parser::Message, shared::{extract_message, write_message, ExtractError}};
 struct GlobalState {
@@ -43,11 +43,10 @@ pub fn server(){
 }
 
 fn handler_chan(client_stream: &mut TcpStream) {
-    // let (mut add_user, _remove_user, _get_user) = session_maker_chan();
     let session = SESSION.get().expect("Global state not initialized");
     let (tx, rx) = mpsc::channel::<Message>();
-    // let current_index = add_user(tx);
     let current_index = session.add_user(tx);
+    client_stream.write(format!("Welcome to the server your Id is {}",current_index).as_bytes()).expect("Failed to write welcome message");
     loop {
         let messages = extract_message(client_stream);
         if messages.is_err() {
@@ -98,6 +97,9 @@ fn handler_chan(client_stream: &mut TcpStream) {
             write_message(client_stream, msg);
         }
     }
+    client_stream.shutdown(std::net::Shutdown::Both).expect("Failed to shutdown client stream");
+    session.remove_user(current_index);
+    println!("Client disconnected: {}", current_index);
 }
 
 pub enum HandleMessageError {
