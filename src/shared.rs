@@ -1,4 +1,4 @@
-use std::{io::{Read, Write}, net::TcpStream};
+use std::{io::{ErrorKind, Read, Write}, net::TcpStream};
 
 use crate::parser::{Message, ParseError};
 
@@ -18,6 +18,7 @@ pub enum ExtractError {
     InvalidMessage(ParseError),
     NotReady,
     IOError(std::io::Error),
+    Closed,
 }
 
 pub fn extract_message(stream: &mut TcpStream) -> Result<Vec<Message>, ExtractError> {
@@ -27,6 +28,9 @@ pub fn extract_message(stream: &mut TcpStream) -> Result<Vec<Message>, ExtractEr
         let bytes_read = stream.read(&mut buff);
         match bytes_read {
             Ok(bytes_read) => {
+                if bytes_read == 0 {
+                    return Err(ExtractError::Closed);
+                }
                 let msg = Message::parse(buff[..bytes_read].to_vec().as_ref());
                 match msg {
                     Ok(msg) => {
@@ -41,8 +45,11 @@ pub fn extract_message(stream: &mut TcpStream) -> Result<Vec<Message>, ExtractEr
                     }
                 }
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                 return Err(ExtractError::NotReady);
+            }
+            Err(ref e) if matches!(e.kind(), ErrorKind::ConnectionReset | ErrorKind::BrokenPipe | ErrorKind::UnexpectedEof) => {
+                return Err(ExtractError::Closed);
             }
             Err(e) => {
                 return Err(ExtractError::IOError(e));
