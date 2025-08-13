@@ -15,6 +15,7 @@ fn main() {
     if mode == "server" {
         server::server();
     } else {
-        client::client();
+        let num = args[2].parse::<usize>().expect("Invalid peer number");
+        client::client(num);
     }
 }

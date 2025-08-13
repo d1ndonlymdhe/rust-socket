@@ -14,6 +14,10 @@ pub enum ParseError {
 }
 
 impl Message {
+    pub fn new(peer: usize, content: Vec<u8>, has_more: bool) -> Self {
+        Message { peer, content, has_more }
+    }
+
     pub fn parse(input: &Vec<u8>) -> Result<Self, ParseError> {
         let mut input = input.iter();
         let peer = input.by_ref().take(4).cloned().collect::<Vec<_>>();

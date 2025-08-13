@@ -2,11 +2,11 @@ use std::{
     collections::HashMap,
     net::{TcpListener, TcpStream},
     sync::{
-        mpsc::{self, SendError, Sender, TryRecvError}, Arc, Mutex, OnceLock
+        Arc, Mutex, OnceLock,
+        mpsc::{self, SendError, Sender, TryRecvError},
     },
     thread,
 };
-
 
 use crate::{
     parser::Message,
@@ -70,8 +70,7 @@ pub fn server() {
     SESSION.get_or_init(|| Mutex::new(GlobalState::new()));
     let listener = TcpListener::bind("0.0.0.0:8000").expect("Could not bind to 8000");
     loop {
-        let (client_stream, _client_addr) =
-            listener.accept().expect("Failed to accept connection");
+        let (client_stream, _client_addr) = listener.accept().expect("Failed to accept connection");
         client_stream
             .set_nonblocking(true)
             .expect("Failed to set non-blocking mode");
@@ -93,9 +92,9 @@ fn handler_chan(client_stream: Arc<Mutex<TcpStream>>) {
     let read_stream = Arc::clone(&client_stream);
     let h1 = thread::spawn(move || {
         loop {
-            let messages = extract_message(&mut read_stream.lock().unwrap());
-            if messages.is_err() {
-                let err = messages.unwrap_err();
+            let message = extract_message(&mut read_stream.lock().unwrap());
+            if message.is_err() {
+                let err = message.unwrap_err();
                 match err {
                     ExtractError::IOError(e) => {
                         eprintln!("IO Error: {}", e);
@@ -104,7 +103,8 @@ fn handler_chan(client_stream: Arc<Mutex<TcpStream>>) {
                     }
                     ExtractError::InvalidMessage(parse_error) => {
                         eprintln!("Parse Error: {:?}", parse_error);
-                        let msg = Message::encode(0, "Invalid message".as_bytes().to_vec().as_ref());
+                        let msg =
+                            Message::encode(0, "Invalid message".as_bytes().to_vec().as_ref());
                         write_message(&mut read_stream.lock().unwrap(), msg);
                         continue;
                     }
@@ -118,25 +118,24 @@ fn handler_chan(client_stream: Arc<Mutex<TcpStream>>) {
                     }
                 }
             }
-            let messages = messages.unwrap();
-            for msg in messages {
-                let res = handle_message(current_index, msg);
-                if res.is_err() {
-                    let err = res.unwrap_err();
-                    match err {
-                        HandleMessageError::PeerNotFound(peer) => {
-                            eprintln!("Peer not found: {}", peer);
-                            let msg = Message::encode(0, "Peer not found".as_bytes().to_vec().as_ref());
-                            write_message(&mut read_stream.lock().unwrap(), msg);
-                        }
-                        HandleMessageError::SendChanError(send_error) => {
-                            eprintln!("Failed to send message: {:?}", send_error);
-                            let msg = Message::encode(
-                                0,
-                                "Failed to send message".as_bytes().to_vec().as_ref(),
-                            );
-                            write_message(&mut read_stream.lock().unwrap(), msg);
-                        }
+            let message = message.unwrap();
+
+            let res = handle_message(current_index, message);
+            if res.is_err() {
+                let err = res.unwrap_err();
+                match err {
+                    HandleMessageError::PeerNotFound(peer) => {
+                        eprintln!("Peer not found: {}", peer);
+                        let msg = Message::encode(0, "Peer not found".as_bytes().to_vec().as_ref());
+                        write_message(&mut read_stream.lock().unwrap(), msg);
+                    }
+                    HandleMessageError::SendChanError(send_error) => {
+                        eprintln!("Failed to send message: {:?}", send_error);
+                        let msg = Message::encode(
+                            0,
+                            "Failed to send message".as_bytes().to_vec().as_ref(),
+                        );
+                        write_message(&mut read_stream.lock().unwrap(), msg);
                     }
                 }
             }
@@ -148,12 +147,18 @@ fn handler_chan(client_stream: Arc<Mutex<TcpStream>>) {
             let internal_res = internal_rx.try_recv();
             match internal_res {
                 Ok(_) => {
-                    println!("Internal shutdown signal received, stopping write thread for client: {}", current_index);
+                    println!(
+                        "Internal shutdown signal received, stopping write thread for client: {}",
+                        current_index
+                    );
                     break;
-                },
-                Err(TryRecvError::Empty) => {},
+                }
+                Err(TryRecvError::Empty) => {}
                 Err(TryRecvError::Disconnected) => {
-                    println!("Internal channel disconnected, stopping write thread for client: {}", current_index);
+                    println!(
+                        "Internal channel disconnected, stopping write thread for client: {}",
+                        current_index
+                    );
                     break; // Channel disconnected, stop processing
                 }
             };
@@ -161,16 +166,15 @@ fn handler_chan(client_stream: Arc<Mutex<TcpStream>>) {
             match res {
                 Ok(msg) => {
                     write_message(&mut write_stream.lock().unwrap(), msg);
-                },
+                }
                 Err(ref e) if *e == TryRecvError::Empty => {
                     // continue;
-                },
-                Err(e) =>{
+                }
+                Err(e) => {
                     eprintln!("Error receiving message: {:?}", e);
                     // continue;
                 }
             }
-            
         }
     });
     h1.join().expect("Failed to join read thread");
